@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <!-- import CSS -->
+    <title>字数统计工具</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="static/css/index.css" />
+    <link rel="stylesheet" href="static/css/recet.css" />
+
+    <script src="static/js/vue.js"></script>
+
+    <script src="static/js/index.js"></script>
+    <link rel="stylesheet" type="text/css" href="static/css/codemirror.min.css" />
+
+    <link rel="stylesheet" type="text/css" href="static/css/cobalt.css" />
+    <link rel="stylesheet" href="static/css/element-theme-2.7.0.min.css" />
+  </head>
+
+  <body>
+    <div id="app">
+      <div>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <div>
+              <el-alert title="输入区域" type="info" :closable="false"></el-alert>
+              <el-card class="box-card">
+                <div slot="header" class="clearfix">
+                  <span>统计字段</span>
+                  <!-- <el-button style="float: right; padding: 3px 0" type="text">操作按钮</el-button> -->
+                </div>
+                <div class="count">
+                  <el-input class="input-new-tag" v-if="inputVisible" v-model="inputValue" ref="saveTagInput" size="small" @keyup.enter.native="handleInputConfirm" @blur="handleInputConfirm">
+                  </el-input>
+                  <el-button v-else type="primary" class="button-new-tag" size="small" @click="showInput">+ 新增</el-button>
+                  <!-- closable -->
+                  <el-tag v-for=" (tag,index) in findTexts" :key="index" closable @close="handleClose(tag)"> {{tag}} </el-tag>
+                </div>
+              </el-card>
+              <el-input v-model="inputdate" type="textarea" :autosize="{ minRows: 20, maxRows: 20 }" placeholder="请输入内容"></el-input>
+              <div class="my-2 text-right">
+                <el-button type="primary" @click="countWord">开始分析</el-button>
+                <el-button type="danger" @click="inputdate=''">清空内容</el-button>
+                <el-button type="danger" @click="clearResArrayStorage">清空缓存</el-button>
+              </div>
+            </div>
+          </el-col>
+
+          <el-col :span="12">
+            <div>
+              <el-alert title="结果" type="info" :closable="false"></el-alert>
+              <div class="my-2">
+                <el-button class="mx-2" type="success" @click="CopyCount">复制全部统计次数</el-button>
+                <el-button class="mx-2" type="success" @click="CopyCountWord">复制全部统计词汇</el-button>
+              </div>
+              <!-- 统计区域词汇区域 -->
+              <div class="res">
+                <el-card class="box-card my-2" v-for="(item,i) in resArray " :key="i" :column="2">
+                  <div slot="header" class="clearfix">
+                    <span>{{item.name}}</span>
+                    <el-button style="float: right; padding: 3px 0" type="text" @click="RemoveRes">删除</el-button>
+                  </div>
+                  <el-tag class="my-2" size="small"> {{item.text}} </el-tag>
+
+                  <el-collapse>
+                    <el-collapse-item v-for="(item,i) in item.res " :title="item.name">
+                      <p class="count-res">{{item.words}}</p>
+                    </el-collapse-item>
+                  </el-collapse>
+
+                  <div class="count"></div>
+                </el-card>
+              </div>
+
+              <!-- 代码块 -->
+            </div>
+          </el-col>
+        </el-row>
+      </div>
+    </div>
+  </body>
+
+  <script>
+    new Vue({
+      el: "#app",
+      data: function () {
+        return {
+          inputdate: "",
+          outputdate: "",
+          inputValue: "",
+          inputVisible: false,
+          findTexts: ["经济", "市场"],
+          resArray: [],
+        };
+      },
+      mounted() {},
+      created() {
+        this.getResArrayStorage();
+      },
+
+      methods: {
+        clearResArrayStorage() {
+          localStorage.removeItem("resArray");
+          this.$message.success("清空缓存成功");
+          this.resArray = [];
+        },
+        RemoveRes(index) {
+          this.resArray.splice(index, 1);
+          this.setResArrayStorage();
+        },
+        setResArrayStorage() {
+          localStorage.setItem("resArray", JSON.stringify(this.resArray));
+        },
+        // 读取本地缓存
+        getResArrayStorage() {
+          let resArray = localStorage.getItem("resArray");
+          if (resArray) {
+            this.resArray = JSON.parse(resArray);
+            this.$message.success("读取本地缓存成功");
+          }
+        },
+        countWord() {
+          //统计 findTexts 出现字数
+          const res = this.findTexts.map((item) => {
+            let reg = new RegExp(item, "g");
+            let count = this.inputdate.match(reg);
+            return {
+              name: item,
+              count: count ? count.length : 0,
+              //words 匹配单词前面5个和后面5个
+              words: this.inputdate.match(new RegExp(`.{0,4}${item}.{0,4}`, "g"))?.join(","),
+            };
+          });
+          console.log(res);
+          //   展示结果
+          const resText = res.map((item) => `${item.name}出现了${item.count}次`).join("\t");
+          //   输入此次结果名称
+          const name = this.$prompt("本次统计字数如下\n" + resText, "分析成功,请为这次结果起个名称吧", {
+            confirmButtonText: "确定",
+            cancelButtonText: "取消",
+            inputPattern: /\S/,
+            inputErrorMessage: "不能为空",
+          })
+            .then(({ value }) => {
+              //   保存结果
+              this.resArray.push({
+                name: value,
+                text: resText,
+                res,
+              });
+              //   缓存到本地
+              this.setResArrayStorage();
+              //   清空输入框
+              //   this.inputdate = "";
+              this.$message({
+                type: "success",
+                message: `分析成功!`,
+              });
+            })
+            .catch(() => {
+              this.$message({
+                type: "info",
+                message: "取消保存",
+              });
+            });
+
+          console.log(res);
+        },
+        toDate() {
+          // 分割换行 转换数组
+          let arr = this.inputdate.split("\n");
+          console.log(arr);
+
+          let newArr = arr.map((item) => convert2Pinyin(item));
+          this.outputdate = newArr.join("\n");
+        },
+        handleClose(tag) {
+          this.findTexts.splice(this.findTexts.indexOf(tag), 1);
+        },
+        showInput() {
+          this.inputVisible = true;
+          this.$nextTick((_) => {
+            this.$refs.saveTagInput.$refs.input.focus();
+          });
+        },
+        handleInputConfirm() {
+          let inputValue = this.inputValue;
+          if (inputValue) {
+            this.findTexts.push(inputValue);
+          }
+          this.inputVisible = false;
+          this.inputValue = "";
+        },
+        CopyCount() {
+          // 复制为excle 格式
+          let res = "";
+          this.resArray.forEach((item) => {
+            res += item.name + "\n" + "\t" + item.text + "\n";
+          });
+
+          this.copyToClipboard(res);
+        },
+        CopyCountWord() {
+          // 复制为excle 格式
+          let res = "";
+          this.resArray.forEach((item) => {
+            res += item.name + "\n" + "\t" + item.text + "\n";
+            item.res.forEach((item) => {
+              res += "\t" + item.name + "\n" + "\t" + item.words + "\n";
+            });
+          });
+          this.copyToClipboard(res);
+        },
+
+        copyToClipboard(text) {
+          var textArea = document.createElement("textarea");
+          textArea.value = text;
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand("copy");
+          textArea.remove();
+          this.$message.success("复制成功!");
+        },
+      },
+    });
+  </script>
+</html>
+<style>
+  .count-res {
+    max-height: 90px;
+    overflow-y: auto;
+    color: rgb(76, 76, 221);
+    text-indent: 2rem;
+  }
+  .res {
+    height: calc(100vh - 100px);
+    overflow-y: scroll;
+  }
+  .top {
+    display: flex;
+    padding: 20px 10vw;
+
+    /* text-align: center; */
+    align-items: center;
+    justify-content: center;
+  }
+  .el-tag + .el-tag {
+    margin-left: 10px;
+  }
+  .input-new-tag {
+    width: 90px;
+    margin-left: 10px;
+    vertical-align: bottom;
+  }
+  .title {
+    text-align: center;
+    margin: 10px 0;
+  }
+  .count {
+    margin: 10px 0;
+  }
+</style>
